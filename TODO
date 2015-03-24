@@ -8,3 +8,4 @@
 * Cron like rules to enable variable traffic
 * Move to use nftables instead
 * Capture + Replay of packets.
+* Compile s-expr -> nftables  ?? <is this a good idea?>

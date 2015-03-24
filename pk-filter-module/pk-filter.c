@@ -88,9 +88,6 @@ static bool (*pk_ip_attr_matchers_t[PK_AT_MAX+1])(const char* val, struct iphdr*
   [PK_AT_MAX] = 0
 };
 
-
-
-
 // Proc configuration  airo.c
 struct proc_data {
 	int release_buffer;
@@ -101,6 +98,7 @@ struct proc_data {
 	char *wbuffer;
 	void (*on_close) (struct inode *, struct file *);
 };
+
 static ssize_t proc_read( struct file *file,char __user *buffer,size_t len,loff_t *offset);
 static ssize_t proc_write( struct file *file,const char __user *buffer,size_t len,loff_t *offset );
 static int proc_close( struct inode *inode, struct file *file );
@@ -118,7 +116,6 @@ static const struct file_operations proc_pk_filter_ops = {
 
 // better way needed 
 static unsigned int atou(const char *s);
-
 
 static unsigned int
 pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
@@ -146,6 +143,9 @@ static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
   if(cmd == NULL)
     return true;
 
+  // Iterate through command attributes and make sure we match all attributes.
+  // TODO We could have or matching too (and (or src="foo" dst="kkk"))
+  
   list_for_each(_a,&cmd->attrs) {
     a = list_entry(_a,pk_attr_t,list);
     match_attrs = match_attrs && pk_ip_attr_matchers_t[a->type](a->val,hdr);
