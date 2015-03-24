@@ -1,0 +1,9 @@
+A simple kernel module to gain a better understanding of netfilter/packet filtering :
+
+We are trying to write a simple kernel module to
+
+* Gain a better grasp of programming in kernel space.
+* Understanding of different protocols.
+* Look at options we can provide in firewalls.
+
+
