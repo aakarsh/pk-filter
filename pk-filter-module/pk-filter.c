@@ -45,10 +45,10 @@ enum pk_rule_type {
 };
 
 enum pk_attr_type {
-  PK_AT_SRC,
-  PK_AT_DST,
-  PK_AT_PROTO,
-  PK_AT_PORT
+  PK_AT_SRC  = 0,
+  PK_AT_DST = 1,
+  PK_AT_PROTO = 2,
+  PK_AT_MAX = 3
 };
 
 typedef struct pk_attr {
@@ -63,17 +63,32 @@ typedef struct pk_cmd {
   struct list_head attrs;
 } pk_cmd_t;
 
+
+
 // List of packet filtering commands
 static LIST_HEAD(pk_cmds);
 
 // Configure cmd & attributes
-static bool pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value);
+static void pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value);
 
 // Matchers
+
+
+
 static bool pk_dst_match(const char* addr, struct iphdr* hdr);
 static bool pk_src_match(const char* addr, struct iphdr* hdr);
 static bool pk_proto_match(const char* proto, struct iphdr* hdr);
 static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr);
+
+static bool (*pk_ip_attr_matchers_t[PK_AT_MAX+1])(const char* val, struct iphdr* hdr) =
+{
+  [PK_AT_SRC]  = pk_src_match,
+  [PK_AT_DST] = pk_dst_match,
+  [PK_AT_PROTO] = pk_proto_match,
+  [PK_AT_MAX] = 0
+};
+
+
 
 
 // Proc configuration  airo.c
@@ -105,8 +120,6 @@ static const struct file_operations proc_pk_filter_ops = {
 static unsigned int atou(const char *s);
 
 
-
-
 static unsigned int
 pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
 	     const struct net_device *in, const struct net_device *out,
@@ -114,7 +127,6 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
 
 
 static struct nf_hook_ops pk_filter_ops[] __read_mostly = {
-	/* After packet filtering, change source only for VS/NAT */
 	{
 		.hook		= pk_filter_in,
 		.owner		= THIS_MODULE,
@@ -125,34 +137,20 @@ static struct nf_hook_ops pk_filter_ops[] __read_mostly = {
 };
 
 
-static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr){
+static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
+{
   struct list_head* _a;
   pk_attr_t* a;
-
   bool match_attrs = true;
+
   if(cmd == NULL)
     return true;
 
   list_for_each(_a,&cmd->attrs) {
     a = list_entry(_a,pk_attr_t,list);
-
-    switch(a->type){
-    case PK_AT_DST:
-      match_attrs = match_attrs && pk_dst_match(a->val,hdr);
-      break;      
-    case PK_AT_SRC:
-      match_attrs = match_attrs && pk_src_match(a->val,hdr);
-      break;
-    case PK_AT_PORT:
-      // nothing for now
-      break;
-    case PK_AT_PROTO:
-      match_attrs = match_attrs && pk_proto_match(a->val,hdr);
-      break;
-    default :
-      break;
-    }
+    match_attrs = match_attrs && pk_ip_attr_matchers_t[a->type](a->val,hdr);
   }
+  
   return match_attrs;
 }
 
@@ -165,7 +163,7 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
   struct list_head* _c;
   pk_cmd_t* c;
 
-  bool match_found = false;
+  //  bool match_found = false;
   struct iphdr* hdr = ip_hdr(skb);
 
   /**
@@ -203,7 +201,7 @@ static int __init pk_filter_init(void)
 {
   struct proc_dir_entry *entry;
   pk_cmd_t * cmd;
-  pk_attr_t* attr;
+  //  pk_attr_t* attr;
   
   printk(KERN_INFO "pkfilter:Hi Aakarsh\n");
   nf_register_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
@@ -226,7 +224,7 @@ static int __init pk_filter_init(void)
   return 0;    // Non-zero return means that the module couldn't be loaded.
 }
 
-static bool pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value) {
+static void pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value) {
   pk_attr_t* attr = (pk_attr_t*) kmalloc(sizeof(pk_attr_t),GFP_KERNEL);
   INIT_LIST_HEAD(&attr->list);
   attr->type = type;
@@ -237,9 +235,9 @@ static bool pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value) {
 
 static void __exit pk_filter_cleanup(void)
 {
-  struct list_head *_c,*_a;
-  pk_cmd_t* c = NULL;
-  pk_attr_t* a = NULL;
+  //  struct list_head *_c,*_a;
+  //  pk_cmd_t* c = NULL;
+  //  pk_attr_t* a = NULL;
   nf_unregister_hooks(pk_filter_ops,ARRAY_SIZE(pk_filter_ops));
   remove_proc_entry("pk_filter_list",NULL);
   // TODO Need to free the command list
