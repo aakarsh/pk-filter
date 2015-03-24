@@ -6,6 +6,10 @@
  * published by the Free Software Foundation.
  *
  */
+
+// TODO insert jokes about Greenspun's tenth rule here
+//http://en.wikipedia.org/wiki/Greenspun%27s_tenth_rule
+
 #include <linux/ctype.h>
 #include <linux/gfp.h>
 #include <linux/in.h>
@@ -18,7 +22,6 @@
 #include <linux/textsearch.h>
 #include <linux/types.h>
 #include <linux/udp.h>
-
 
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_expect.h>
@@ -63,8 +66,6 @@ typedef struct pk_cmd {
   struct list_head attrs;
 } pk_cmd_t;
 
-
-
 // List of packet filtering commands
 static LIST_HEAD(pk_cmds);
 
@@ -72,9 +73,6 @@ static LIST_HEAD(pk_cmds);
 static void pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value);
 
 // Matchers
-
-
-
 static bool pk_dst_match(const char* addr, struct iphdr* hdr);
 static bool pk_src_match(const char* addr, struct iphdr* hdr);
 static bool pk_proto_match(const char* proto, struct iphdr* hdr);
@@ -144,8 +142,8 @@ static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
     return true;
 
   // Iterate through command attributes and make sure we match all attributes.
-  // TODO We could have or matching too (and (or src="foo" dst="kkk"))
-  
+  // TODO We could have or matching too (and (or src="foo" dst="kkk"))  
+
   list_for_each(_a,&cmd->attrs) {
     a = list_entry(_a,pk_attr_t,list);
     match_attrs = match_attrs && pk_ip_attr_matchers_t[a->type](a->val,hdr);
