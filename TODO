@@ -1,9 +1,9 @@
 * parse list of attribute and commands from proc files
-
 * define a hashtable for blacklist
-* define a bloom filter for white list
+* define a bloom filter for blacklist
 * A configurable timer function which dynamically enables packet pass through
 * A client program to which we mmap packet headers
 * A randomized sampling of packets passing through the system.
-* netlink socket to communicate with the server
-* cron like rules to enable variable traffic
+* Netlink socket to communicate with the server
+* Cron like rules to enable variable traffic
+* Move to use nftables instead

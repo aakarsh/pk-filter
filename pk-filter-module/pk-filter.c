@@ -1,3 +1,11 @@
+/*
+ * Copyright (c)  Aakarsh Nair <aakarsh.nair@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ */
 #include <linux/ctype.h>
 #include <linux/gfp.h>
 #include <linux/in.h>
@@ -28,6 +36,7 @@ MODULE_AUTHOR("Aakarsh Nair");
 MODULE_DESCRIPTION("A simple demonstration of using netfilter to track incoming packets");
 
 
+// Configuration Rules
 enum pk_rule_type {
   PK_ACCEPT,
   PK_DROP,
@@ -54,29 +63,20 @@ typedef struct pk_cmd {
   struct list_head attrs;
 } pk_cmd_t;
 
-// list of packet filtering commands
+// List of packet filtering commands
 static LIST_HEAD(pk_cmds);
 
-
+// Configure cmd & attributes
 static bool pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value);
 
+// Matchers
+static bool pk_dst_match(const char* addr, struct iphdr* hdr);
+static bool pk_src_match(const char* addr, struct iphdr* hdr);
+static bool pk_proto_match(const char* proto, struct iphdr* hdr);
+static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr);
 
-// From airo.c
-static ssize_t proc_read( struct file *file,
-			  char __user *buffer,
-			  size_t len,
-			  loff_t *offset);
 
-static ssize_t proc_write( struct file *file,
-			   const char __user *buffer,
-			   size_t len,
-			   loff_t *offset );
-
-static int proc_close( struct inode *inode, struct file *file );
-static int proc_pk_filter_open( struct inode *inode, struct file *file );
-
-static unsigned int atou(const char *s);
-
+// Proc configuration  airo.c
 struct proc_data {
 	int release_buffer;
 	int readlen;
@@ -86,6 +86,11 @@ struct proc_data {
 	char *wbuffer;
 	void (*on_close) (struct inode *, struct file *);
 };
+static ssize_t proc_read( struct file *file,char __user *buffer,size_t len,loff_t *offset);
+static ssize_t proc_write( struct file *file,const char __user *buffer,size_t len,loff_t *offset );
+static int proc_close( struct inode *inode, struct file *file );
+static int proc_pk_filter_open( struct inode *inode, struct file *file );
+static void proc_pk_filter_close( struct inode *inode, struct file *file );
 
 static const struct file_operations proc_pk_filter_ops = {
 	.owner		= THIS_MODULE,
@@ -96,50 +101,11 @@ static const struct file_operations proc_pk_filter_ops = {
 	.llseek		= default_llseek,
 };
 
-static void proc_pk_filter_close( struct inode *inode, struct file *file );
-static int proc_pk_filter_open( struct inode *inode, struct file *file )
-{
+// better way needed 
+static unsigned int atou(const char *s);
 
-  struct proc_data *data;
-  if ((file->private_data = kzalloc(sizeof(struct proc_data ), GFP_KERNEL)) == NULL)
-    return -ENOMEM;
 
-  data = file->private_data;
-  if ((data->rbuffer = kzalloc( 180, GFP_KERNEL )) == NULL) {
-    kfree (file->private_data);
-    return -ENOMEM;
-  }
 
-  data->writelen = 0;
-  #define BUF_LEN 4096
-  data->maxwritelen = BUF_LEN;
-
-  if ((data->wbuffer = kzalloc( BUF_LEN, GFP_KERNEL )) == NULL) {
-    kfree (data->rbuffer);
-    kfree (file->private_data);
-    return -ENOMEM;
-  }
-
-  data->on_close = proc_pk_filter_close;
-  return 0;
-}
-
-static void proc_pk_filter_close( struct inode *inode, struct file *file )
-{
-  struct proc_data *data;
-  char* line;
-  int k = 0;
-
-  data = file->private_data;
-
-  
-  if ( !data->writelen ) return;
-
-  while((line = strsep(&(data->wbuffer),"\n")) !=NULL){
-    printk(KERN_INFO "%d. %s",k++,line);
-  }  
-  // free buffers
-}
 
 static unsigned int
 pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
@@ -158,22 +124,6 @@ static struct nf_hook_ops pk_filter_ops[] __read_mostly = {
 	}
 };
 
-static bool pk_dst_match(const char* addr, struct iphdr* hdr){
-  char pkt_dst[20];
-  sprintf(pkt_dst,"%pI4",&(hdr->daddr));
-  return (strcmp(pkt_dst,addr) == 0);  
-}
-
-static bool pk_src_match(const char* addr, struct iphdr* hdr){
-  char pkt_src[20];
-  sprintf(pkt_src,"%pI4",&(hdr->saddr));
-  return (strcmp(pkt_src,addr) == 0);  
-}
-
-static bool pk_proto_match(const char* proto, struct iphdr* hdr){
-  unsigned int p = atou(proto);
-  return p == hdr->protocol;
-}
 
 static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr){
   struct list_head* _a;
@@ -189,8 +139,7 @@ static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr){
     switch(a->type){
     case PK_AT_DST:
       match_attrs = match_attrs && pk_dst_match(a->val,hdr);
-      break;
-      
+      break;      
     case PK_AT_SRC:
       match_attrs = match_attrs && pk_src_match(a->val,hdr);
       break;
@@ -245,7 +194,8 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
         return NF_ACCEPT;
       }
     }
-  }  
+  }
+
   return NF_ACCEPT;
 }
 
@@ -267,7 +217,6 @@ static int __init pk_filter_init(void)
   INIT_LIST_HEAD(&cmd->attrs);
 
   cmd->type = PK_LOG_HDR;
-
   pk_cmd_add_attribute(cmd,PK_AT_DST, "10.0.0.243");
   pk_cmd_add_attribute(cmd,PK_AT_PROTO, "17");  
 
@@ -311,8 +260,49 @@ static void __exit pk_filter_cleanup(void)
   printk(KERN_INFO "pkfilter: Goodbye Aakarsh.\n");
 }
 
+static int proc_pk_filter_open( struct inode *inode, struct file *file )
+{
 
+  struct proc_data *data;
+  if ((file->private_data = kzalloc(sizeof(struct proc_data ), GFP_KERNEL)) == NULL)
+    return -ENOMEM;
 
+  data = file->private_data;
+  if ((data->rbuffer = kzalloc( 180, GFP_KERNEL )) == NULL) {
+    kfree (file->private_data);
+    return -ENOMEM;
+  }
+
+  data->writelen = 0;
+  #define BUF_LEN 4096
+  data->maxwritelen = BUF_LEN;
+
+  if ((data->wbuffer = kzalloc( BUF_LEN, GFP_KERNEL )) == NULL) {
+    kfree (data->rbuffer);
+    kfree (file->private_data);
+    return -ENOMEM;
+  }
+
+  data->on_close = proc_pk_filter_close;
+  return 0;
+}
+
+static void proc_pk_filter_close( struct inode *inode, struct file *file )
+{
+  struct proc_data *data;
+  char* line;
+  int k = 0;
+
+  data = file->private_data;
+
+  
+  if ( !data->writelen ) return;
+
+  while((line = strsep(&(data->wbuffer),"\n")) !=NULL){
+    printk(KERN_INFO "%d. %s",k++,line);
+  }  
+  // free buffers
+}
 
 
 // Genereic Proc Methods After This Point
@@ -379,8 +369,26 @@ static int proc_close( struct inode *inode, struct file *file )
 }
 
 
+static bool pk_dst_match(const char* addr, struct iphdr* hdr){
+  char pkt_dst[20];
+  sprintf(pkt_dst,"%pI4",&(hdr->daddr));
+  return (strcmp(pkt_dst,addr) == 0);  
+}
+
+static bool pk_src_match(const char* addr, struct iphdr* hdr){
+  char pkt_src[20];
+  sprintf(pkt_src,"%pI4",&(hdr->saddr));
+  return (strcmp(pkt_src,addr) == 0);  
+}
+
+static bool pk_proto_match(const char* proto, struct iphdr* hdr){
+  unsigned int p = atou(proto);
+  return (p == hdr->protocol);
+}
 
 
+
+// from boot.h
 unsigned int atou(const char *s)
 {
 	unsigned int i = 0;

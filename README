@@ -6,4 +6,6 @@ We are trying to write a simple kernel module to
 * Understanding of different protocols.
 * Look at options we can provide in firewalls.
 
+This is an experimental project. Use nftables or iptables for serious work.
+
 
