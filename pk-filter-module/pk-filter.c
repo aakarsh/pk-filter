@@ -160,12 +160,12 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
 {
   struct list_head* _c;
   pk_cmd_t* c;
-
-  //  bool match_found = false;
   struct iphdr* hdr = ip_hdr(skb);
 
   /**
-     We must iterate through each cmd rule 
+     We must iterate through each cmd rule performing the action of
+     the first matching rule.
+
      foreach cmd  in cmds
         if all_attributes match packet <-- can use hash function here.
            apply rule action
@@ -191,7 +191,6 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
       }
     }
   }
-
   return NF_ACCEPT;
 }
 
@@ -199,7 +198,6 @@ static int __init pk_filter_init(void)
 {
   struct proc_dir_entry *entry;
   pk_cmd_t * cmd;
-  //  pk_attr_t* attr;
   
   printk(KERN_INFO "pkfilter:Hi Aakarsh\n");
   nf_register_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
