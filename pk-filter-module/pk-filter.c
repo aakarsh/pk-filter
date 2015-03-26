@@ -199,7 +199,7 @@ static int __init pk_filter_init(void)
   struct proc_dir_entry *entry;
   pk_cmd_t * cmd;
   
-  printk(KERN_INFO "pkfilter:Hi Aakarsh\n");
+  printk(KERN_INFO "pkfilter:Hi pk-filter\n");
   nf_register_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
 
   /* Setup the pk-filter list */
@@ -251,7 +251,7 @@ static void __exit pk_filter_cleanup(void)
   }
   kfree(&pk_cmds);
  */
-  printk(KERN_INFO "pkfilter: Goodbye Aakarsh.\n");
+  printk(KERN_INFO "pkfilter: Goodbye pk-filter.\n");
 }
 
 static int proc_pk_filter_open( struct inode *inode, struct file *file )
