@@ -38,6 +38,76 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Aakarsh Nair");
 MODULE_DESCRIPTION("A simple demonstration of using netfilter to track incoming packets");
 
+#define NETLINK_PK_FILTER 31
+
+// phew new process a message here
+static int pf_filter_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
+{
+  int type;
+  type = nlh->nlmsg_type;
+
+  printk(KERN_INFO "pf_filter_rcv_msg : Got a netlink message type : %d \n",type);
+  //  struct net *net = sock_net(skb->sk);
+  //  const struct nfnl_callback *nc;
+  /**
+  nc = nfnetlink_find_client(type, ss);
+  if (!nc) {
+    rcu_read_unlock();
+    return -EINVAL;
+  }
+  */
+  {
+    //int min_len = nlmsg_total_size(sizeof(struct nfgenmsg));
+    //    u_int8_t cb_id = NFNL_MSG_TYPE(nlh->nlmsg_type);    
+  }
+  return 0;
+}
+
+static void pf_filter_rcv(struct sk_buff *skb)
+{
+  struct nlmsghdr *nlh = nlmsg_hdr(skb);
+  //  int msglen;
+
+  if (nlh->nlmsg_len < NLMSG_HDRLEN ||
+      skb->len < nlh->nlmsg_len)
+    return;
+
+
+  if (!netlink_net_capable(skb, CAP_NET_ADMIN)) {
+    netlink_ack(skb, nlh, -EPERM);
+    return;
+  }
+
+  netlink_rcv_skb(skb, &pf_filter_rcv_msg);
+
+}
+static int __net_init pk_filter_net_init(struct net *net)
+{
+  struct sock *nfnl;
+  struct netlink_kernel_cfg cfg = {
+    .input	= pf_filter_rcv,
+
+  };
+  
+  nfnl = netlink_kernel_create(net, NETLINK_PK_FILTER, &cfg);
+  net->nfnl_stash = nfnl;
+  rcu_assign_pointer(net->nfnl, nfnl);
+
+  return 0;
+}
+
+static void __net_exit pk_filter_net_exit_batch(struct list_head *net_exit_list)  
+{
+  struct net *net;
+  list_for_each_entry(net, net_exit_list, exit_list)
+    netlink_kernel_release(net->nfnl_stash);
+}
+
+static struct pernet_operations pk_filter_net_ops = {
+	.init		= pk_filter_net_init,
+	.exit_batch	= pk_filter_net_exit_batch,
+};
+
 
 // Configuration Rules
 enum pk_rule_type {
@@ -143,12 +213,10 @@ static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
 
   // Iterate through command attributes and make sure we match all attributes.
   // TODO We could have or matching too (and (or src="foo" dst="kkk"))  
-
   list_for_each(_a,&cmd->attrs) {
     a = list_entry(_a,pk_attr_t,list);
     match_attrs = match_attrs && pk_ip_attr_matchers_t[a->type](a->val,hdr);
-  }
-  
+  }  
   return match_attrs;
 }
 
@@ -162,17 +230,6 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
   pk_cmd_t* c;
   struct iphdr* hdr = ip_hdr(skb);
 
-  /**
-     We must iterate through each cmd rule performing the action of
-     the first matching rule.
-
-     foreach cmd  in cmds
-        if all_attributes match packet <-- can use hash function here.
-           apply rule action
-           return
-     else 
-        return accept
-   */  
   list_for_each(_c,&pk_cmds) {
     c = list_entry(_c,pk_cmd_t,list);
     if(pk_cmd_match(c,hdr)) {
@@ -216,8 +273,8 @@ static int __init pk_filter_init(void)
 
   // Add command to command list
   list_add(&pk_cmds,&cmd->list);
-  
-  return 0;    // Non-zero return means that the module couldn't be loaded.
+
+  return register_pernet_subsys(&pk_filter_net_ops);
 }
 
 static void pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value) {
@@ -251,6 +308,7 @@ static void __exit pk_filter_cleanup(void)
   }
   kfree(&pk_cmds);
  */
+  unregister_pernet_subsys(&pk_filter_net_ops);
   printk(KERN_INFO "pkfilter: Goodbye pk-filter.\n");
 }
 
