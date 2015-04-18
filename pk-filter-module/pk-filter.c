@@ -40,16 +40,21 @@ MODULE_DESCRIPTION("A simple demonstration of using netfilter to track incoming 
 
 #define NETLINK_PK_FILTER 31
 
-// phew new process a message here
+
+/**
+ * We process the netlink message by looking at the nlmsghdr along
+ * with the socket buffer contents.
+ */
 static int pf_filter_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
-  int type;
-  type = nlh->nlmsg_type;
+  int type = nlh->nlmsg_type;
+  printk(KERN_INFO "pf_filter_rcv_msg : Got a netlink message type : %d \n", type);
 
-  printk(KERN_INFO "pf_filter_rcv_msg : Got a netlink message type : %d \n",type);
-  //  struct net *net = sock_net(skb->sk);
-  //  const struct nfnl_callback *nc;
   /**
+
+  struct net *net = sock_net(skb->sk);
+  const struct nfnl_callback *nc;
+
   nc = nfnetlink_find_client(type, ss);
   if (!nc) {
     rcu_read_unlock();
@@ -63,30 +68,39 @@ static int pf_filter_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
   return 0;
 }
 
+
+/**
+ * Main handler for dealing with netlink messages.
+ */
 static void pf_filter_rcv(struct sk_buff *skb)
 {
   struct nlmsghdr *nlh = nlmsg_hdr(skb);
-  //  int msglen;
 
-  if (nlh->nlmsg_len < NLMSG_HDRLEN ||
-      skb->len < nlh->nlmsg_len)
-    return;
+  printk(KERN_INFO "pf_filter_rcv : Got netlink message \n");
 
-
-  if (!netlink_net_capable(skb, CAP_NET_ADMIN)) {
-    netlink_ack(skb, nlh, -EPERM);
+  if (nlh->nlmsg_len < NLMSG_HDRLEN || skb->len < nlh->nlmsg_len) {
+    printk(KERN_INFO "pf_filter_rcv: Rejecting message header length %d is less than NLMSG_HDRLEN %d \n",nlh->nlmsg_len , NLMSG_HDRLEN);
     return;
   }
 
+  if (!netlink_net_capable(skb, CAP_NET_ADMIN)) {
+    printk(KERN_INFO "pf_filter_rcv: Rejecting message, insufficent permission ");
+    netlink_ack(skb, nlh, -EPERM);
+    return;
+  }
+  
   netlink_rcv_skb(skb, &pf_filter_rcv_msg);
-
 }
+
+/**
+ * Initializes pf filter networking.
+ * Set the input method for handling netlink sockets to pf_filter_rcv.
+ */
 static int __net_init pk_filter_net_init(struct net *net)
 {
   struct sock *nfnl;
   struct netlink_kernel_cfg cfg = {
     .input	= pf_filter_rcv,
-
   };
   
   nfnl = netlink_kernel_create(net, NETLINK_PK_FILTER, &cfg);
@@ -267,7 +281,7 @@ static int __init pk_filter_init(void)
   INIT_LIST_HEAD(&cmd->list);
   INIT_LIST_HEAD(&cmd->attrs);
 
-  cmd->type = PK_LOG_HDR;
+  cmd->type = PK_ACCEPT;
   pk_cmd_add_attribute(cmd,PK_AT_DST, "10.0.0.243");
   pk_cmd_add_attribute(cmd,PK_AT_PROTO, "17");  
 
@@ -437,8 +451,6 @@ static bool pk_proto_match(const char* proto, struct iphdr* hdr){
   unsigned int p = atou(proto);
   return (p == hdr->protocol);
 }
-
-
 
 // from boot.h
 unsigned int atou(const char *s)

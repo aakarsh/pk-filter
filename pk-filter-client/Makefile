@@ -1,2 +1,2 @@
-pk-client:
-	 gcc pk-client.c -o pk-client $(pkgconfig --cflags --libs libnl-3.0)
+pk-client: pk-client.c
+	 gcc -I/usr/local/include pk-client.c -o pk-client   -L/usr/local/lib -lnl
