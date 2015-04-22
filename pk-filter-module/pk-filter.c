@@ -64,15 +64,6 @@ static bool (*pk_nl_cmd_handler_t[PK_NL_CMD_MAX+1])(const struct sk_buff* skb, s
   [PK_NL_CMD_MAX] = 0
 };
 
-static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
-  printk(KERN_INFO "pk_nl_cmd_start called \n");
-  return 0;
-}
-
-static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
-  printk(KERN_INFO "pk_nl_cmd_stop called \n");
-  return 1;
-}
 
 /**
  * We process the netlink message by looking at the nlmsghdr along
@@ -246,6 +237,18 @@ static struct nf_hook_ops pk_filter_ops[] __read_mostly = {
 };
 
 
+static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
+  printk(KERN_INFO "pk_nl_cmd_start called, registering hooks \n");
+  nf_register_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
+  return 1;
+}
+
+static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
+  printk(KERN_INFO "pk_nl_cmd_stop called, unregistering hooks \n");
+  nf_unregister_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
+  return 1;
+}
+
 static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
 {
   struct list_head* _a;
@@ -298,10 +301,8 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
 static int __init pk_filter_init(void)
 {
   struct proc_dir_entry *entry;
-  pk_cmd_t * cmd;
-  
+  pk_cmd_t * cmd;  
   printk(KERN_INFO "pkfilter:Hi pk-filter\n");
-  nf_register_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
 
   /* Setup the pk-filter list */
   entry = proc_create_data("pk_filter_list", (S_IRUGO | S_IWUGO),
@@ -311,9 +312,9 @@ static int __init pk_filter_init(void)
   INIT_LIST_HEAD(&cmd->list);
   INIT_LIST_HEAD(&cmd->attrs);
 
-  cmd->type = PK_ACCEPT;
-  pk_cmd_add_attribute(cmd,PK_AT_DST, "10.0.0.243");
-  pk_cmd_add_attribute(cmd,PK_AT_PROTO, "17");  
+  cmd->type = PK_LOG_HDR;
+  pk_cmd_add_attribute(cmd,PK_AT_DST, "10.0.0.112");
+
 
   // Add command to command list
   list_add(&pk_cmds,&cmd->list);
