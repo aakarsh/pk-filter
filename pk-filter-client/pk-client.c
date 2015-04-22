@@ -13,8 +13,8 @@ typedef struct pkfilter_msg_config_cmd {
 } __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
 
 typedef enum pkfilter_cmd {
+  PK_FILTER_CMD_STOP,
   PK_FILTER_CMD_START,
-  PK_FILTER_CMD_STOP
 } pkfilter_cmd_t;
 
 static void print_usage(void)
@@ -24,11 +24,7 @@ static void print_usage(void)
   exit(1);
 }
 
-/**
- * Command to start the packet filter.
- */
-int pk_filter_send_start(struct nl_sock* sk)
-{
+int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num,struct nl_sock* sk) {
   int err;
   struct nl_msg *msg;
   pkfilter_cmd_t cmd;
@@ -38,7 +34,7 @@ int pk_filter_send_start(struct nl_sock* sk)
   if(!msg)
     return -1;
 
-  config_cmd.command = PK_FILTER_CMD_START;
+  config_cmd.command = cmd_num;
 
   nlmsg_append(msg, &config_cmd, sizeof(config_cmd), NLMSG_ALIGNTO);
   
@@ -46,20 +42,28 @@ int pk_filter_send_start(struct nl_sock* sk)
   nl_wait_for_ack(sk);  
  errout:
   nlmsg_free(msg);
-  return err;  
+  return err;    
+}
+
+
+/**
+ * Command to start the packet filter.
+ */
+int pk_filter_send_start(struct nl_sock* sk)
+{
+  pk_filter_send_simple_cmd(PK_FILTER_CMD_START, sk);
 }
 
 int main(int argc, char* argv[])
 {
   struct nl_sock* sk;
-  char buffer[] = "Howdy, From Userspace";
   int err;
+  char* subcmd = argv[1];
   
   if (argc < 2 || !strcmp(argv[1], "-h"))
     print_usage();
   
   if (!(sk = nl_socket_alloc())){
-    // nl_cli_fatal(ENOBUFS, "Unable to allocate netlink socket");
     exit(-1);
   }
 
@@ -67,8 +71,11 @@ int main(int argc, char* argv[])
     return err;
   }
 
-  pk_filter_send_start(sk);  
-
+  if(strcmp(subcmd,"start")) {
+    pk_filter_send_simple_cmd(PK_FILTER_CMD_START,sk);
+  } else if (strcmp(subcmd,"stop")) {
+    pk_filter_send_simple_cmd(PK_FILTER_CMD_STOP,sk);
+  }
   
   return 0;
 }

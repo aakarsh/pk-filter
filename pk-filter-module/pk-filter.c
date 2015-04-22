@@ -46,11 +46,33 @@ typedef struct pkfilter_msg_config_cmd {
 } __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
 
 typedef enum pkfilter_cmd {
+  PK_FILTER_CMD_STOP,
   PK_FILTER_CMD_START,
-  PK_FILTER_CMD_STOP
 } pkfilter_cmd_t;
-
 // end copy
+
+#define PK_NL_CMD_MAX 2
+
+
+static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
+static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
+
+static bool (*pk_nl_cmd_handler_t[PK_NL_CMD_MAX+1])(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs) =
+{
+  [PK_FILTER_CMD_STOP]  = pk_nl_cmd_start,
+  [PK_FILTER_CMD_START] = pk_nl_cmd_stop,
+  [PK_NL_CMD_MAX] = 0
+};
+
+static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
+  printk(KERN_INFO "pk_nl_cmd_start called \n");
+  return 0;
+}
+
+static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
+  printk(KERN_INFO "pk_nl_cmd_stop called \n");
+  return 1;
+}
 
 /**
  * We process the netlink message by looking at the nlmsghdr along
@@ -58,24 +80,21 @@ typedef enum pkfilter_cmd {
  */
 static int pf_filter_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
+  pkfilter_msg_config_cmd_t *msg;
   int type = nlh->nlmsg_type;
   printk(KERN_INFO "pf_filter_rcv_msg : Got a netlink message type : %d \n", type);
+  msg = nlmsg_data(nlh);
 
-  /**
 
-  struct net *net = sock_net(skb->sk);
-  const struct nfnl_callback *nc;
-
-  nc = nfnetlink_find_client(type, ss);
-  if (!nc) {
-    rcu_read_unlock();
-    return -EINVAL;
+  printk(KERN_INFO "Got Command : %d \n", msg->command);
+  if(msg->command > PK_NL_CMD_MAX || msg->command < 0) {
+    printk(KERN_INFO "pk_filter_rcv_msg: Invalid command type : %d",msg->command);
+    return -1;
   }
-  */
-  {
-    //int min_len = nlmsg_total_size(sizeof(struct nfgenmsg));
-    //    u_int8_t cb_id = NFNL_MSG_TYPE(nlh->nlmsg_type);    
-  }
+  // Dispatch command
+  printk(KERN_INFO "Calling dispatch on command %d  \n",msg->command);
+  pk_nl_cmd_handler_t[msg->command](skb,nlh,NULL);
+
   return 0;
 }
 
@@ -262,11 +281,11 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
       case PK_ACCEPT:
         return NF_ACCEPT;
       case PK_DROP:
-        printk(KERN_INFO "dropping pkt : src=%pI4 dst=%pI4 proto=%d len=%d \n",
+        printk(KERN_INFO "Dropping pkt : src=%pI4 dst=%pI4 proto=%d len=%d \n",
                &(hdr->saddr),&(hdr->daddr),hdr->protocol,hdr->tot_len);
         return NF_DROP;
       case PK_LOG_HDR:
-        printk(KERN_INFO "logging header pkt : id=%d src=%pI4 dst=%pI4 proto=%d len=%d check=%d ttl=%d  frag_off=%d\n",
+        printk(KERN_INFO "Logging header pkt : id=%d src=%pI4 dst=%pI4 proto=%d len=%d check=%d ttl=%d  frag_off=%d\n",
                hdr->id,
                &(hdr->saddr),&(hdr->daddr),hdr->protocol,hdr->tot_len,hdr->check,hdr->ttl,hdr->frag_off);
         return NF_ACCEPT;

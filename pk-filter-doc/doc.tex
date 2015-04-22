@@ -1,0 +1,111 @@
+% Created 2014-04-04 Fri 19:09
+\documentclass[11pt,twocolumn]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fixltx2e}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{soul}
+\usepackage{textcomp}
+\usepackage{marvosym}
+\usepackage{wasysym}
+\usepackage{latexsym}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usepackage{color}
+\usepackage{listings}
+
+
+\graphicspath{ {images/} }
+
+\tolerance=1000
+\providecommand{\alert}[1]{\textbf{#1}}
+
+\title{Packet Filtering Module}
+\author{Aakarsh Nair}
+\date{\today}
+
+\begin{document}
+
+\lstdefinestyle{customc}{
+%  basicstyle=\footnotesize,       % the size of the fonts that are used for the code
+  numbers=right,                   % where to put the line-numbers
+  numberstyle=\footnotesize,      % the size of the fonts that are used for the line-numbers
+  stepnumber=1,                   % the step between two line-numbers. If it is 1 each line will be numbered
+  numbersep=5pt,                  % how far the line-numbers are from the code
+  backgroundcolor=\color{white},  % choose the background color. You must add \usepackage{color}
+  showspaces=false,               % show spaces adding particular underscores
+  showstringspaces=false,         % underline spaces within strings
+  showtabs=false,                 % show tabs within strings adding particular underscores
+  frame=single,           % adds a frame around the code
+  tabsize=2,          % sets default tabsize to 2 spaces
+  captionpos=b,           % sets the caption-position to bottom
+  breaklines=true,        % sets automatic line breaking
+  breakatwhitespace=false,    % sets if automatic breaks should only happen at whitespace
+  escapeinside={\%*}{*)},          % if you want to add a comment within your code
+  %% belowcaptionskip=1\baselineskip,
+  %% breaklines=true,
+  %% frame=L,
+  %% xleftmargin=\parindent,
+  language=C,
+  %% showstringspaces=false,
+  basicstyle=\footnotesize\ttfamily,
+  keywordstyle=\bfseries\color{green!40!black},
+  commentstyle=\itshape\color{purple!40!black},
+  %% identifierstyle=\color{black},
+  stringstyle=\color{orange},
+}
+
+\lstdefinelanguage{anX86} {
+	morekeywords={
+		nop,movl,pushl,popl,cmpl,testl,leal,cmovl,jmp,je,jne,
+		jz,jnz,jg,jge,jl,jle,addl,subl,imul,idiv,cdq,incl,decl,
+		negl,andl,orl,xorl,notl,shrl,shll,sarl,sall,ret,leave,
+		call,setg,setl,setge,setle,setne,sete,movzbl,
+		eax,ebx,ecx,edx,edi,esi,ebp,esp,al,bl,cl,dl,
+                pause,lock,decb,jns,jle,jmp,cmpb,movb,xchg,xchgb,lea
+	},
+	sensitive=true,
+	morecomment=[l]{\#},
+	morestring=[b]"
+}
+\lstset{escapechar=@,style=customc}
+\lstset{language=C}
+
+\maketitle
+
+\setcounter{tocdepth}{3}
+\tableofcontents
+
+\maketitle
+\vspace*{1cm}
+
+\section{Introduction}
+
+The \lstinline{pk_filter} module is a test case for supporting the
+addtion of custom packet filtering to the linux kernel. The module is
+meant to be configurable from user space. The module is configured and
+operated over netlink sockets. Most of the module was developed as
+part of the UCSC Linux Kernel class.
+
+\section{Starting and Starting}
+
+\section{Rule Description}
+
+\section{User Space Filters}
+
+\subsection{Summary and Acknowledgment}
+
+Most of the module
+
+\begin{thebibliography}{9}
+
+\bibitem{libnl}
+  \textit{LibNL : Userspace netlink library documentation} \\
+  \url{http://www.infradead.org/~tgr/libnl/doc/core.html}
+\end{thebibliography}
+
+\end{document}
