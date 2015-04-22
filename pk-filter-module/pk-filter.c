@@ -40,6 +40,17 @@ MODULE_DESCRIPTION("A simple demonstration of using netfilter to track incoming 
 
 #define NETLINK_PK_FILTER 31
 
+// begin copy for now
+typedef struct pkfilter_msg_config_cmd {
+	u_int8_t	command;	/* pkfilter_msg_config_cmds */
+} __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
+
+typedef enum pkfilter_cmd {
+  PK_FILTER_CMD_START,
+  PK_FILTER_CMD_STOP
+} pkfilter_cmd_t;
+
+// end copy
 
 /**
  * We process the netlink message by looking at the nlmsghdr along

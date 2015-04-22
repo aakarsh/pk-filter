@@ -99,3 +99,5 @@ all.config
 
 # Kdevelop4
 *.kdev4
+*/bin/*
+pk-filter-client/bin/
