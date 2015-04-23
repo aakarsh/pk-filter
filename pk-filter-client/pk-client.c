@@ -13,8 +13,8 @@ typedef struct pkfilter_msg_config_cmd {
 } __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
 
 typedef enum pkfilter_cmd {
-  PK_FILTER_CMD_STOP,
-  PK_FILTER_CMD_START,
+  PK_FILTER_CMD_STOP = 0,
+  PK_FILTER_CMD_START = 1,
 } pkfilter_cmd_t;
 
 static void print_usage(void)
@@ -24,7 +24,7 @@ static void print_usage(void)
   exit(1);
 }
 
-int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num,struct nl_sock* sk) {
+int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num, struct nl_sock* sk) {
   int err;
   struct nl_msg *msg;
   pkfilter_cmd_t cmd;
@@ -35,7 +35,7 @@ int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num,struct nl_sock* sk) {
     return -1;
 
   config_cmd.command = cmd_num;
-
+  
   nlmsg_append(msg, &config_cmd, sizeof(config_cmd), NLMSG_ALIGNTO);
   
   err = nl_send_auto_complete(sk, msg);
@@ -43,15 +43,6 @@ int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num,struct nl_sock* sk) {
  errout:
   nlmsg_free(msg);
   return err;    
-}
-
-
-/**
- * Command to start the packet filter.
- */
-int pk_filter_send_start(struct nl_sock* sk)
-{
-  pk_filter_send_simple_cmd(PK_FILTER_CMD_START, sk);
 }
 
 int main(int argc, char* argv[])
@@ -68,12 +59,13 @@ int main(int argc, char* argv[])
   }
 
   if ((err = nl_connect(sk, NETLINK_PK_FILTER)) < 0){
+    fprintf(stderr,"No protocol handler for pk_filter installed \n");
     return err;
   }
-
-  if(strcmp(subcmd,"start")) {
+  
+  if(strcmp(subcmd,"start") == 0) {
     pk_filter_send_simple_cmd(PK_FILTER_CMD_START,sk);
-  } else if (strcmp(subcmd,"stop")) {
+  } else if (strcmp(subcmd,"stop") == 0) {
     pk_filter_send_simple_cmd(PK_FILTER_CMD_STOP,sk);
   }
   

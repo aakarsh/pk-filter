@@ -55,12 +55,12 @@ typedef enum pkfilter_cmd {
 
 
 static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
-static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
+static bool pk_nl_cmd_stop(const struct sk_buff* skb,  struct nlmsghdr* nlmsghdr ,struct nlattr **attrs);
 
 static bool (*pk_nl_cmd_handler_t[PK_NL_CMD_MAX+1])(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs) =
 {
-  [PK_FILTER_CMD_STOP]  = pk_nl_cmd_start,
-  [PK_FILTER_CMD_START] = pk_nl_cmd_stop,
+  [PK_FILTER_CMD_STOP]  = pk_nl_cmd_stop,
+  [PK_FILTER_CMD_START] = pk_nl_cmd_start,
   [PK_NL_CMD_MAX] = 0
 };
 
@@ -236,16 +236,26 @@ static struct nf_hook_ops pk_filter_ops[] __read_mostly = {
 	}
 };
 
+typedef enum pk_hook_status {
+  PK_HOOK_ENABLED,
+  PK_HOOK_DISABLED,
+} pk_hook_status_t;
+
+static pk_hook_status_t hook_status = PK_HOOK_DISABLED;
 
 static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
   printk(KERN_INFO "pk_nl_cmd_start called, registering hooks \n");
-  nf_register_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
+  if(hook_status == PK_HOOK_DISABLED) {
+    nf_register_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
+  }
   return 1;
 }
 
 static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
   printk(KERN_INFO "pk_nl_cmd_stop called, unregistering hooks \n");
-  nf_unregister_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
+  if(hook_status == PK_HOOK_ENABLED) {
+    nf_unregister_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
+  }
   return 1;
 }
 
@@ -315,7 +325,6 @@ static int __init pk_filter_init(void)
   cmd->type = PK_LOG_HDR;
   pk_cmd_add_attribute(cmd,PK_AT_DST, "10.0.0.112");
 
-
   // Add command to command list
   list_add(&pk_cmds,&cmd->list);
 
@@ -335,8 +344,7 @@ static void __exit pk_filter_cleanup(void)
 {
   //  struct list_head *_c,*_a;
   //  pk_cmd_t* c = NULL;
-  //  pk_attr_t* a = NULL;
-  nf_unregister_hooks(pk_filter_ops,ARRAY_SIZE(pk_filter_ops));
+  //  pk_attr_t* a = NULL;  
   remove_proc_entry("pk_filter_list",NULL);
   // TODO Need to free the command list
   /**
