@@ -4,27 +4,19 @@
 
 #include <netlink/cache.h>
 #include <netlink/route/link.h>
-//#include <netlink/netlink-types.h>
+
+#include "pk-netlink.h"
 
 #define NETLINK_PK_FILTER 31
-
-typedef struct pkfilter_msg_config_cmd {
-	u_int8_t	command;	/* pkfilter_msg_config_cmds */
-} __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
-
-typedef enum pkfilter_cmd {
-  PK_FILTER_CMD_STOP = 0,
-  PK_FILTER_CMD_START = 1,
-} pkfilter_cmd_t;
 
 static void print_usage(void)
 {
   printf("Usage: pk-client <cmd>\n"
-         " cmd := { start | stop } \n");
+         " cmd := { start | stop | add } \n");
   exit(1);
 }
 
-int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num, struct nl_sock* sk) {
+int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num, struct nl_sock* sk, pk_client_cmd_t* sub_cmd) {
   int err;
   struct nl_msg *msg;
   pkfilter_cmd_t cmd;
@@ -33,10 +25,13 @@ int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num, struct nl_sock* sk) {
   msg = nlmsg_alloc_simple(NETLINK_PK_FILTER,0);
   if(!msg)
     return -1;
-
   config_cmd.command = cmd_num;
   
   nlmsg_append(msg, &config_cmd, sizeof(config_cmd), NLMSG_ALIGNTO);
+
+  if(sub_cmd!=NULL){
+    nlmsg_append(msg,&sub_cmd, sizeof(sub_cmd), NLMSG_ALIGNTO);    
+  }
   
   err = nl_send_auto_complete(sk, msg);
   nl_wait_for_ack(sk);  
@@ -44,6 +39,24 @@ int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num, struct nl_sock* sk) {
   nlmsg_free(msg);
   return err;    
 }
+
+pk_client_cmd_t* parse_add_cmd(char* str_cmd){
+  pk_client_cmd_t* cmd;
+  
+  char* ip = "10.0.0.112";
+  int attr_size =sizeof(pk_client_attr_t)+sizeof(ip);
+  
+  cmd = malloc(sizeof(pk_client_cmd_t)+attr_size);
+  cmd->type = PK_LOG_HDR;
+
+  // Command Attributes
+  cmd->nattr = 1;
+  cmd->attrs[0].type = PK_AT_DST;
+  cmd->attrs[0].nval = sizeof(ip);
+  memcpy(cmd->attrs[0].val,ip, sizeof(ip));
+  return cmd;
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -64,9 +77,11 @@ int main(int argc, char* argv[])
   }
   
   if(strcmp(subcmd,"start") == 0) {
-    pk_filter_send_simple_cmd(PK_FILTER_CMD_START,sk);
+    pk_filter_send_simple_cmd(PK_FILTER_CMD_START,sk,NULL);
   } else if (strcmp(subcmd,"stop") == 0) {
-    pk_filter_send_simple_cmd(PK_FILTER_CMD_STOP,sk);
+    pk_filter_send_simple_cmd(PK_FILTER_CMD_STOP,sk,NULL);
+  } else if(strcmp(subcmd,"add") == 0) {    
+    pk_filter_send_simple_cmd(PK_FILTER_CMD_ADD,sk,parse_add_cmd(subcmd));
   }
   
   return 0;

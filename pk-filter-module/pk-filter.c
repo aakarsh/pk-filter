@@ -6,10 +6,6 @@
  * published by the Free Software Foundation.
  *
  */
-
-// TODO insert jokes about Greenspun's tenth rule here
-//http://en.wikipedia.org/wiki/Greenspun%27s_tenth_rule
-
 #include <linux/ctype.h>
 #include <linux/gfp.h>
 #include <linux/in.h>
@@ -34,37 +30,13 @@
 #include <linux/ip.h>
 #include <linux/netfilter/x_tables.h>
 
+#include "pk-netlink.h"
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Aakarsh Nair");
 MODULE_DESCRIPTION("A simple demonstration of using netfilter to track incoming packets");
 
 #define NETLINK_PK_FILTER 31
-
-// begin copy for now
-typedef struct pkfilter_msg_config_cmd {
-	u_int8_t	command;	/* pkfilter_msg_config_cmds */
-} __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
-
-typedef enum pkfilter_cmd {
-  PK_FILTER_CMD_STOP,
-  PK_FILTER_CMD_START,
-} pkfilter_cmd_t;
-// end copy
-
-// Configuration Rules
-enum pk_rule_type {
-  PK_ACCEPT,
-  PK_DROP,
-  PK_LOG,
-  PK_LOG_HDR
-};
-
-enum pk_attr_type {
-  PK_AT_SRC  = 0,
-  PK_AT_DST = 1,
-  PK_AT_PROTO = 2,
-  PK_AT_MAX = 3
-};
 
 typedef struct pk_attr {
   struct list_head list;
@@ -78,18 +50,15 @@ typedef struct pk_cmd {
   struct list_head attrs;
 } pk_cmd_t;
 
-
-
-#define PK_NL_CMD_MAX 2
-
-
 static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
+static bool pk_nl_cmd_add(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
 static bool pk_nl_cmd_stop(const struct sk_buff* skb,  struct nlmsghdr* nlmsghdr ,struct nlattr **attrs);
 
 static bool (*pk_nl_cmd_handler_t[PK_NL_CMD_MAX+1])(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs) =
 {
   [PK_FILTER_CMD_STOP]  = pk_nl_cmd_stop,
   [PK_FILTER_CMD_START] = pk_nl_cmd_start,
+  [PK_FILTER_CMD_ADD] = pk_nl_cmd_add,
   [PK_NL_CMD_MAX] = 0
 };
 
@@ -107,7 +76,7 @@ static int pf_filter_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 
 
   printk(KERN_INFO "Got Command : %d \n", msg->command);
-  if(msg->command > PK_NL_CMD_MAX || msg->command < 0) {
+  if(msg->command >= PK_NL_CMD_MAX || msg->command < 0) {
     printk(KERN_INFO "pk_filter_rcv_msg: Invalid command type : %d",msg->command);
     return -1;
   }
@@ -262,6 +231,11 @@ static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,
   return 1;
 }
 
+static bool pk_nl_cmd_add(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
+    printk(KERN_INFO "pk_nl_cmd_add called\n");
+    return 1;
+}
+
 static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
 {
   struct list_head* _a;
@@ -270,7 +244,7 @@ static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
 
   if(cmd == NULL)
     return true;
-
+  
   // Iterate through command attributes and make sure we match all attributes.
   // TODO We could have or matching too (and (or src="foo" dst="kkk"))  
   list_for_each(_a,&cmd->attrs) {
