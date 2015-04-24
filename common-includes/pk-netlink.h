@@ -43,6 +43,8 @@ typedef struct pkfilter_msg_config_cmd {
   u_int8_t	command;	/* pkfilter_msg_config_cmds */
   u_int8_t      len;
   pk_client_cmd_t data[];
-} __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
+}__attribute__ ((packed)) pkfilter_msg_config_cmd_t;
+//pkfilter_msg_config_cmd_t;
+
 
 #endif

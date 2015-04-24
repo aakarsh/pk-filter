@@ -40,7 +40,7 @@ int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num, struct nl_sock* sk, pk_cli
     memcpy(&(config_cmd->data[0]),sub_cmd,sub_cmd->size);
   }
   
-  nlmsg_append(msg, config_cmd, sizeof(config_cmd), NLMSG_ALIGNTO);
+  nlmsg_append(msg, config_cmd, cmd_size, NLMSG_ALIGNTO);
   
   err = nl_send_auto_complete(sk, msg);
   nl_wait_for_ack(sk);  
@@ -52,18 +52,20 @@ int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num, struct nl_sock* sk, pk_cli
 pk_client_cmd_t* parse_add_cmd(char* str_cmd){
   pk_client_cmd_t* cmd;
   
-  char* ip = "10.0.0.112";
-  int attr_size = sizeof(pk_client_attr_t)+sizeof(ip);
+  char* ip = "192.168.1.75";
+  int ip_len = strlen(ip);
+  int attr_size = sizeof(pk_client_attr_t)+ip_len;
   int cmd_size = attr_size+sizeof(pk_client_cmd_t);
   
   cmd = malloc(cmd_size);
   cmd->type = PK_LOG_HDR;
   cmd->size = cmd_size;
+  
   // Command Attributes
   cmd->nattr = 1;
   cmd->attrs[0].type = PK_AT_DST;
-  cmd->attrs[0].nval = sizeof(ip);
-  memcpy(cmd->attrs[0].val,ip, sizeof(ip));
+  cmd->attrs[0].nval = ip_len;
+  memcpy(cmd->attrs[0].val,ip, ip_len);
   return cmd;
 }
 

@@ -240,7 +240,9 @@ static bool pk_nl_cmd_add(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,s
   printk(KERN_INFO "pk_nl_cmd_add called\n");
   msg = nlmsg_data(nlmsghdr);
   cmd = &(msg->data[0]);
-  printk(KERN_INFO " Adding rule type %d \n" ,cmd->type);
+  
+  printk(KERN_INFO " Adding rule type %d nattr %d size %d \n",
+         cmd->type,cmd->nattr,cmd->size);
   
   pk_cmd = (pk_cmd_t*) kmalloc(sizeof(pk_cmd_t),GFP_KERNEL);
   INIT_LIST_HEAD(&pk_cmd->list);
@@ -248,13 +250,13 @@ static bool pk_nl_cmd_add(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,s
   pk_cmd->type = cmd->type;
   list_add(&pk_cmds,&pk_cmd->list);
 
-  //  for(i = 0; i < cmd->nattr; i++) {
-  printk(KERN_INFO "Attribute Type %d %s \n" ,
+  for(i = 0; i < cmd->nattr; i++) {
+  printk(KERN_INFO "Attribute Type [%d] [%s] \n" ,
              cmd->attrs[0].type,
              cmd->attrs[0].val);
     
-  pk_cmd_add_attribute(pk_cmd, cmd->attrs[0].type,cmd->attrs[0].val);    
-    //  }  
+     pk_cmd_add_attribute(pk_cmd, cmd->attrs[0].type,cmd->attrs[0].val);    
+  }  
       
   return 1;
 }
