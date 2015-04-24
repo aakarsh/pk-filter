@@ -219,6 +219,7 @@ static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr
   printk(KERN_INFO "pk_nl_cmd_start called, registering hooks \n");
   if(hook_status == PK_HOOK_DISABLED) {
     nf_register_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
+    hook_status = PK_HOOK_ENABLED;
   }
   return 1;
 }
