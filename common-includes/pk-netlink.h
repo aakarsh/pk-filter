@@ -3,10 +3,6 @@
 
 // structures shared with kernel module
 
-typedef struct pkfilter_msg_config_cmd {
-	u_int8_t	command;	/* pkfilter_msg_config_cmds */
-} __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
-
 typedef enum pkfilter_cmd {
   PK_FILTER_CMD_STOP = 0,
   PK_FILTER_CMD_START = 1,
@@ -36,11 +32,17 @@ typedef struct pk_client__attr {
 } pk_client_attr_t;
 
 typedef struct pk_client_cmd {
+  int size;
   int type;
   int nattr;
   pk_client_attr_t attrs[];  
 } pk_client_cmd_t;
 
 
+typedef struct pkfilter_msg_config_cmd {
+  u_int8_t	command;	/* pkfilter_msg_config_cmds */
+  u_int8_t      len;
+  pk_client_cmd_t data[];
+} __attribute__ ((packed)) pkfilter_msg_config_cmd_t;
 
 #endif

@@ -20,18 +20,27 @@ int pk_filter_send_simple_cmd(pkfilter_cmd_t cmd_num, struct nl_sock* sk, pk_cli
   int err;
   struct nl_msg *msg;
   pkfilter_cmd_t cmd;
-  pkfilter_msg_config_cmd_t config_cmd;
+  pkfilter_msg_config_cmd_t* config_cmd;
+  int cmd_size = sizeof(pkfilter_msg_config_cmd_t);
+  
+  if(sub_cmd!=NULL) {
+    cmd_size += sub_cmd->size;
+  }
+  
+  config_cmd = malloc(cmd_size);    
   
   msg = nlmsg_alloc_simple(NETLINK_PK_FILTER,0);
   if(!msg)
     return -1;
-  config_cmd.command = cmd_num;
   
-  nlmsg_append(msg, &config_cmd, sizeof(config_cmd), NLMSG_ALIGNTO);
+  config_cmd->command = cmd_num;
 
   if(sub_cmd!=NULL){
-    nlmsg_append(msg,&sub_cmd, sizeof(sub_cmd), NLMSG_ALIGNTO);    
+    config_cmd->len = sub_cmd->size;
+    memcpy(&(config_cmd->data[0]),sub_cmd,sub_cmd->size);
   }
+  
+  nlmsg_append(msg, config_cmd, sizeof(config_cmd), NLMSG_ALIGNTO);
   
   err = nl_send_auto_complete(sk, msg);
   nl_wait_for_ack(sk);  
@@ -44,11 +53,12 @@ pk_client_cmd_t* parse_add_cmd(char* str_cmd){
   pk_client_cmd_t* cmd;
   
   char* ip = "10.0.0.112";
-  int attr_size =sizeof(pk_client_attr_t)+sizeof(ip);
+  int attr_size = sizeof(pk_client_attr_t)+sizeof(ip);
+  int cmd_size = attr_size+sizeof(pk_client_cmd_t);
   
-  cmd = malloc(sizeof(pk_client_cmd_t)+attr_size);
+  cmd = malloc(cmd_size);
   cmd->type = PK_LOG_HDR;
-
+  cmd->size = cmd_size;
   // Command Attributes
   cmd->nattr = 1;
   cmd->attrs[0].type = PK_AT_DST;

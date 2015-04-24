@@ -232,8 +232,31 @@ static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,
 }
 
 static bool pk_nl_cmd_add(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
-    printk(KERN_INFO "pk_nl_cmd_add called\n");
-    return 1;
+  pkfilter_msg_config_cmd_t *msg;
+  pk_client_cmd_t *cmd;
+  pk_cmd_t * pk_cmd;
+  int i;
+  
+  printk(KERN_INFO "pk_nl_cmd_add called\n");
+  msg = nlmsg_data(nlmsghdr);
+  cmd = &(msg->data[0]);
+  printk(KERN_INFO " Adding rule type %d \n" ,cmd->type);
+  
+  pk_cmd = (pk_cmd_t*) kmalloc(sizeof(pk_cmd_t),GFP_KERNEL);
+  INIT_LIST_HEAD(&pk_cmd->list);
+  INIT_LIST_HEAD(&pk_cmd->attrs);
+  pk_cmd->type = cmd->type;
+  list_add(&pk_cmds,&pk_cmd->list);
+
+  //  for(i = 0; i < cmd->nattr; i++) {
+  printk(KERN_INFO "Attribute Type %d %s \n" ,
+             cmd->attrs[0].type,
+             cmd->attrs[0].val);
+    
+  pk_cmd_add_attribute(pk_cmd, cmd->attrs[0].type,cmd->attrs[0].val);    
+    //  }  
+      
+  return 1;
 }
 
 static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
@@ -288,13 +311,14 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
 static int __init pk_filter_init(void)
 {
   struct proc_dir_entry *entry;
-  pk_cmd_t * cmd;  
+  //  pk_cmd_t * cmd;  
   printk(KERN_INFO "pkfilter:Hi pk-filter\n");
 
   /* Setup the pk-filter list */
   entry = proc_create_data("pk_filter_list", (S_IRUGO | S_IWUGO),
                            NULL, &proc_pk_filter_ops, NULL);
 
+  /**
   cmd = (pk_cmd_t*) kmalloc(sizeof(pk_cmd_t),GFP_KERNEL);
   INIT_LIST_HEAD(&cmd->list);
   INIT_LIST_HEAD(&cmd->attrs);
@@ -304,7 +328,8 @@ static int __init pk_filter_init(void)
 
   // Add command to command list
   list_add(&pk_cmds,&cmd->list);
-
+  */
+  
   return register_pernet_subsys(&pk_filter_net_ops);
 }
 
