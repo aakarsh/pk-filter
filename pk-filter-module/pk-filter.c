@@ -28,6 +28,7 @@
 #include <linux/kernel.h>    // included for KERN_INFO
 #include <linux/init.h>      // included for __init and __exit macros
 #include <linux/ip.h>
+#include <linux/filter.h>
 #include <linux/netfilter/x_tables.h>
 
 #include "pk-netlink.h"
@@ -41,7 +42,8 @@ MODULE_DESCRIPTION("A simple demonstration of using netfilter to track incoming 
 typedef struct pk_attr {
   struct list_head list;
   int type;
-  char* val;
+  int len;
+  void* val;
 } pk_attr_t;
 
 typedef struct pk_cmd {
@@ -52,6 +54,7 @@ typedef struct pk_cmd {
 
 static bool pk_nl_cmd_start(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
 static bool pk_nl_cmd_add(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
+static bool pk_nl_cmd_add_bpf(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs);
 static bool pk_nl_cmd_stop(const struct sk_buff* skb,  struct nlmsghdr* nlmsghdr ,struct nlattr **attrs);
 
 static bool (*pk_nl_cmd_handler_t[PK_NL_CMD_MAX+1])(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs) =
@@ -59,6 +62,7 @@ static bool (*pk_nl_cmd_handler_t[PK_NL_CMD_MAX+1])(const struct sk_buff* skb, s
   [PK_FILTER_CMD_STOP]  = pk_nl_cmd_stop,
   [PK_FILTER_CMD_START] = pk_nl_cmd_start,
   [PK_FILTER_CMD_ADD] = pk_nl_cmd_add,
+  [PK_FILTER_CMD_ADD_BPF] = pk_nl_cmd_add_bpf,
   [PK_NL_CMD_MAX] = 0
 };
 
@@ -150,16 +154,20 @@ static LIST_HEAD(pk_cmds);
 static void pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value);
 
 // Matchers
-static bool pk_dst_match(const char* addr, struct iphdr* hdr);
-static bool pk_src_match(const char* addr, struct iphdr* hdr);
-static bool pk_proto_match(const char* proto, struct iphdr* hdr);
-static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr);
+static bool pk_dst_match(const void* addr,int sz, struct iphdr* hdr,struct sk_buff * skb);
+static bool pk_src_match(const void* addr,int sz, struct iphdr* hdr,struct sk_buff * skb);
+static bool pk_proto_match(const void* proto,int sz, struct iphdr* hdr,struct sk_buff * skb);
+static bool pk_bpf_match(const void* bpf_prog,int sz, struct iphdr* hdr,struct sk_buff * skb);
 
-static bool (*pk_ip_attr_matchers_t[PK_AT_MAX+1])(const char* val, struct iphdr* hdr) =
+//statec bool pk_bpf_match(const char* bpf_code, struct 
+static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr,struct sk_buff * skb);
+
+static bool (*pk_ip_attr_matchers_t[PK_AT_MAX+1])(const void* val, int sz,struct iphdr* hdr,struct sk_buff * skb) =
 {
   [PK_AT_SRC]  = pk_src_match,
   [PK_AT_DST] = pk_dst_match,
   [PK_AT_PROTO] = pk_proto_match,
+  [PK_AT_BPF] = pk_bpf_match,
   [PK_AT_MAX] = 0
 };
 
@@ -228,7 +236,102 @@ static bool pk_nl_cmd_stop(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,
   printk(KERN_INFO "pk_nl_cmd_stop called, unregistering hooks \n");
   if(hook_status == PK_HOOK_ENABLED) {
     nf_unregister_hooks(pk_filter_ops, ARRAY_SIZE(pk_filter_ops));
+    hook_status = PK_HOOK_DISABLED;
   }
+  return 1;
+}
+
+struct sock_filter tcp_filter [] = {
+  { 0x28, 0, 0, 0x0000000c },//     (000) ldh      [12]                             
+  { 0x15, 0, 5, 0x000086dd },//     (001) jeq      #0x86dd          jt 2    jf 7    
+  { 0x30, 0, 0, 0x00000014 },//     (002) ldb      [20]                             
+  { 0x15, 6, 0, 0x00000006 },//     (003) jeq      #0x6             jt 10   jf 4    
+  { 0x15, 0, 6, 0x0000002c },//     (004) jeq      #0x2c            jt 5    jf 11   
+  { 0x30, 0, 0, 0x00000036 },//     (005) ldb      [54]                             
+  { 0x15, 3, 4, 0x00000006 },//     (006) jeq      #0x6             jt 10   jf 11   
+  { 0x15, 0, 3, 0x00000800 },//     (007) jeq      #0x800           jt 8    jf 11   
+  { 0x30, 0, 0, 0x00000017 },//     (008) ldb      [23]                             
+  { 0x15, 0, 1, 0x00000006 },//     (009) jeq      #0x6             jt 10   jf 11   
+  { 0x6, 0, 0, 0x00040000 }, //     (010) ret      #262144                          
+  { 0x6, 0, 0, 0x00000000 }, //     (011) ret      #0                               
+  /**
+  { 0x28, 0, 0, 0x0000000c },
+  { 0x15, 27, 0, 0x000086dd },
+  { 0x15, 0, 26, 0x00000800 },
+  { 0x30, 0, 0, 0x00000017 },
+  { 0x15, 0, 24, 0x00000006 },
+  { 0x28, 0, 0, 0x00000014 },
+  { 0x45, 22, 0, 0x00001fff },
+  { 0xb1, 0, 0, 0x0000000e },
+  { 0x48, 0, 0, 0x0000000e },
+  { 0x15, 2, 0, 0x00000050 },
+  { 0x48, 0, 0, 0x00000010 },
+  { 0x15, 0, 17, 0x00000050 },
+  { 0x28, 0, 0, 0x00000010 },
+  { 0x2, 0, 0, 0x00000001 },
+  { 0x30, 0, 0, 0x0000000e },
+  { 0x54, 0, 0, 0x0000000f },
+  { 0x64, 0, 0, 0x00000002 },
+  { 0x7, 0, 0, 0x00000005 },
+  { 0x60, 0, 0, 0x00000001 },
+  { 0x1c, 0, 0, 0x00000000 },
+  { 0x2, 0, 0, 0x00000005 },
+  { 0xb1, 0, 0, 0x0000000e },
+  { 0x50, 0, 0, 0x0000001a },
+  { 0x54, 0, 0, 0x000000f0 },
+  { 0x74, 0, 0, 0x00000002 },
+  { 0x7, 0, 0, 0x00000009 },
+  { 0x60, 0, 0, 0x00000005 },
+  { 0x1d, 1, 0, 0x00000000 },
+  { 0x6, 0, 0, 0x00040000 },
+  { 0x6, 0, 0, 0x00000000 },
+  */
+};
+
+static bool pk_nl_cmd_add_bpf(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,struct nlattr **attrs){
+  
+  pkfilter_msg_add_bpf_filter_cmd_t *msg;
+  pk_cmd_t * pk_cmd;
+  pk_attr_t* attr;
+  struct bpf_prog *prog;
+  struct sock_fprog_kern fprog;
+  
+  int err = 0;
+  
+  msg = nlmsg_data(nlmsghdr);
+  if(msg->len >= 1024){
+    printk(KERN_INFO "Program size exceeded limit(1024):%d \n ",
+           msg->len);
+    return 0;
+  }
+
+  printk(KERN_INFO "pk_nl_cmd_add_bpf : command %d  len %d \n",
+         msg->command, msg->len);
+  
+  fprog.len =sizeof(tcp_filter)/sizeof(struct sock_filter); // msg->len;
+  fprog.filter = tcp_filter; // msg->data;
+  
+  if((err = bpf_prog_create(&prog,&fprog))) {
+    printk(KERN_INFO "Failed to create bpf program %d \n", err);
+    return -EINVAL;
+  }
+  
+  pk_cmd = (pk_cmd_t*) kmalloc(sizeof(pk_cmd_t), GFP_KERNEL);
+  INIT_LIST_HEAD(&pk_cmd->list);
+  INIT_LIST_HEAD(&pk_cmd->attrs);
+  pk_cmd->type = msg->command;
+
+  attr = (pk_attr_t*) kmalloc(sizeof(pk_attr_t),GFP_KERNEL);
+  INIT_LIST_HEAD(&attr->list);
+  attr->type = PK_AT_BPF;
+  attr->len = prog->len;
+  attr->val = prog;
+  
+  // add to command
+  list_add(&pk_cmd->attrs,&attr->list);
+  list_add(&pk_cmds,&pk_cmd->list);
+  
+  printk(KERN_INFO "Added pk_client bpf \n");
   return 1;
 }
 
@@ -249,20 +352,21 @@ static bool pk_nl_cmd_add(const struct sk_buff* skb, struct nlmsghdr* nlmsghdr,s
   INIT_LIST_HEAD(&pk_cmd->list);
   INIT_LIST_HEAD(&pk_cmd->attrs);
   pk_cmd->type = cmd->type;
-  list_add(&pk_cmds,&pk_cmd->list);
+  
 
   for(i = 0; i < cmd->nattr; i++) {
-  printk(KERN_INFO "Attribute Type [%d] [%s] \n" ,
-             cmd->attrs[0].type,
-             cmd->attrs[0].val);
-    
-     pk_cmd_add_attribute(pk_cmd, cmd->attrs[0].type,cmd->attrs[0].val);    
-  }  
-      
+    printk(KERN_INFO "Attribute Type [%d] [%s] \n" ,
+           cmd->attrs[i].type,
+           cmd->attrs[i].val);    
+    pk_cmd_add_attribute(pk_cmd, cmd->attrs[i].type,cmd->attrs[i].val);    
+  }
+  
+  list_add(&pk_cmds,&pk_cmd->list);
+  
   return 1;
 }
 
-static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
+static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr,struct sk_buff * skb)
 {
   struct list_head* _a;
   pk_attr_t* a;
@@ -275,7 +379,7 @@ static bool pk_cmd_match(pk_cmd_t* cmd,struct iphdr* hdr)
   // TODO We could have or matching too (and (or src="foo" dst="kkk"))  
   list_for_each(_a,&cmd->attrs) {
     a = list_entry(_a,pk_attr_t,list);
-    match_attrs = match_attrs && pk_ip_attr_matchers_t[a->type](a->val,hdr);
+    match_attrs = match_attrs && pk_ip_attr_matchers_t[a->type](a->val,a->len,hdr,skb);
   }  
   return match_attrs;
 }
@@ -292,7 +396,7 @@ pk_filter_in(const struct nf_hook_ops *ops, struct sk_buff *skb,
 
   list_for_each(_c,&pk_cmds) {
     c = list_entry(_c,pk_cmd_t,list);
-    if(pk_cmd_match(c,hdr)) {
+    if(pk_cmd_match(c,hdr,skb)) {
       switch (c->type){
       case PK_ACCEPT:
         return NF_ACCEPT;
@@ -337,10 +441,12 @@ static int __init pk_filter_init(void)
 }
 
 static void pk_cmd_add_attribute(pk_cmd_t* cmd , int type,const char* value) {
+  int attr_len = strlen(value);
   pk_attr_t* attr = (pk_attr_t*) kmalloc(sizeof(pk_attr_t),GFP_KERNEL);
   INIT_LIST_HEAD(&attr->list);
   attr->type = type;
   attr->val = kzalloc(1024,GFP_KERNEL);
+  attr->len = min(attr_len,1024);
   strncpy(attr->val,value,1024);
   list_add(&cmd->attrs,&attr->list);
 }
@@ -479,21 +585,42 @@ static int proc_close( struct inode *inode, struct file *file )
 }
 
 
-static bool pk_dst_match(const char* addr, struct iphdr* hdr){
+static bool pk_dst_match(const void* addr, int sz,struct iphdr* hdr,struct sk_buff * skb){
   char pkt_dst[20];
   sprintf(pkt_dst,"%pI4",&(hdr->daddr));
   return (strcmp(pkt_dst,addr) == 0);  
 }
 
-static bool pk_src_match(const char* addr, struct iphdr* hdr){
+static bool pk_src_match(const void* addr, int sz,struct iphdr* hdr,struct sk_buff * skb){
   char pkt_src[20];
   sprintf(pkt_src,"%pI4",&(hdr->saddr));
   return (strcmp(pkt_src,addr) == 0);  
 }
 
-static bool pk_proto_match(const char* proto, struct iphdr* hdr){
+static bool pk_proto_match(const void* proto, int sz,struct iphdr* hdr,struct sk_buff * skb){
   unsigned int p = atou(proto);
   return (p == hdr->protocol);
+}
+
+//TODO need to work more to figure out why bpf filter is not working
+static bool pk_bpf_match(const void* arg, int sz,struct iphdr* hdr,struct sk_buff * skb){ 
+
+  unsigned int pkt_len;
+  struct bpf_prog *prog = (struct bpf_prog*) arg;
+  
+  unsigned int header_len = skb->data - skb_network_header(skb);  
+  skb_push(skb, header_len);
+  
+  pkt_len = BPF_PROG_RUN(prog,skb);
+
+  skb_pull(skb, header_len);
+  
+  if(pkt_len!=0) {    
+    printk(KERN_INFO "pk-filter: bpf didnt match %d \n",pkt_len);      
+  } else{
+    printk(KERN_INFO "Found a matching packet %d \n",pkt_len);      
+  }
+  return pkt_len!=0;
 }
 
 // from boot.h
